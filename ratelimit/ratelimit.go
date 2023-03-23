@@ -1,6 +1,7 @@
-package handler
+package ratelimit
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -37,7 +38,7 @@ func (limiter *RateLimiter) update() {
 	}
 }
 
-func NewRateLimiter() *RateLimiter {
+func New() *RateLimiter {
 	limiter := &RateLimiter{
 		close: make(chan struct{}),
 		peers: make(map[string]time.Time),
@@ -50,28 +51,33 @@ func (limiter *RateLimiter) Close() {
 	limiter.close <- struct{}{}
 }
 
-func (limiter *RateLimiter) Limit(peer string) {
+func (limiter *RateLimiter) Limit(peer string) bool {
 	limiter.mutex.Lock()
-	val, ok := limiter.peers[peer]
-	limiter.mutex.Unlock()
-	if ok {
-		time.Sleep(time.Until(val))
+	value, ok := limiter.peers[peer]
+	var ret bool
+	if !ok || time.Now().After(value) {
+		ret = true
+		limiter.peers[peer] = time.Now().Add(defaultGarbageTime)
+	} else {
+		ret = false
 	}
-
-	limiter.mutex.Lock()
-	limiter.peers[peer] = time.Now().Add(defaultLifeSpan)
+	fmt.Println(limiter.peers[peer])
 	limiter.mutex.Unlock()
+
+	return ret
 }
 
-func (limiter *RateLimiter) LimitDuration(peer string, t time.Duration) {
+func (limiter *RateLimiter) LimitDuration(peer string, t time.Duration) bool {
 	limiter.mutex.Lock()
-	val, ok := limiter.peers[peer]
-	limiter.mutex.Unlock()
-	if ok {
-		time.Sleep(time.Until(val))
+	value, ok := limiter.peers[peer]
+	var ret bool
+	if !ok || time.Now().After(value) {
+		ret = true
+		limiter.peers[peer] = time.Now().Add(t)
+	} else {
+		ret = false
 	}
-
-	limiter.mutex.Lock()
-	limiter.peers[peer] = time.Now().Add(t)
 	limiter.mutex.Unlock()
+
+	return ret
 }
