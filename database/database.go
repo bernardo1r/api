@@ -28,7 +28,8 @@ func New(filepath string) (DB, error) {
 
 func (db *DB) InsertUser(user *User) error {
 	_, err := db.Exec(
-		"INSERT INTO user VALUES (?, ?, ?, ?)",
+		`INSERT INTO user 
+		 VALUES (?, ?, ?, ?)`,
 		user.Name,
 		user.Salt,
 		user.PasswordHash,
@@ -54,12 +55,18 @@ func (db *DB) userQueryRow(query string, arg string) (User, error) {
 		&user.Name,
 		&user.Salt,
 		&user.PasswordHash,
-		&user.Key)
+		&user.Key,
+	)
 	return user, err
 }
 
 func (db *DB) UserByName(name string) (User, error) {
-	user, err := db.userQueryRow("SELECT * FROM user WHERE name=?", name)
+	user, err := db.userQueryRow(
+		`SELECT * 
+		 FROM user 
+		 WHERE name = ?`,
+		name,
+	)
 	if err != nil {
 		return User{}, err
 	}
@@ -67,25 +74,46 @@ func (db *DB) UserByName(name string) (User, error) {
 }
 
 func (db *DB) UserByKey(key string) (User, error) {
-	user, err := db.userQueryRow("SELECT * FROM user WHERE key=?", key)
+	user, err := db.userQueryRow(
+		`SELECT * 
+		 FROM user
+		 WHERE key = ?`,
+		key,
+	)
 	if err != nil {
 		return User{}, err
 	}
 	return user, nil
 }
 
-func (db *DB) dataQueryRow(query string, arg string) (Data, error) {
+func (db *DB) dataQueryRow(query string, arg string) (*Data, error) {
 	var data Data
 	err := db.QueryRow(query, arg).Scan(
 		&data.User,
-		&data.Content)
-	return data, err
+		&data.Content,
+	)
+	return &data, err
 }
 
-func (db *DB) DataByUserName(name string) (Data, error) {
-	data, err := db.dataQueryRow("SELECT * FROM data WHERE user=?", name)
+func (db *DB) DataByUserName(name string) (*Data, error) {
+	data, err := db.dataQueryRow(
+		`SELECT *
+		 FROM data
+		 WHERE user = ?`,
+		name,
+	)
 	if err != nil {
-		return Data{}, err
+		return nil, err
 	}
 	return data, nil
+}
+
+func (db *DB) ReplaceData(data *Data) error {
+	_, err := db.Exec(
+		`REPLACE INTO data
+		 VALUES (?, ?)`,
+		data.User,
+		data.Content,
+	)
+	return err
 }

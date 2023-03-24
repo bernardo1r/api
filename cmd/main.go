@@ -25,6 +25,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/register", router.Register)
 	mux.HandleFunc("/key", router.GenApiKey)
+	mux.HandleFunc("/data", router.HandleData)
 
 	fmt.Println("Listening in http://localhost:54321")
 	err = http.ListenAndServe("localhost:54321", mux)

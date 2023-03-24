@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bernardo1r/api/database"
@@ -196,4 +198,100 @@ func (router *Router) GenApiKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte(keyEncoded))
+}
+
+func (router *Router) HandleData(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		badRequest(w)
+		return
+	}
+	ip, err := getIP(r)
+	if err != nil {
+		internalServerError(w)
+	}
+
+	switch {
+	case r.Method == http.MethodPost:
+		router.postData(w, r, ip)
+
+	case r.Method == http.MethodGet:
+		router.getData(w, r, ip)
+	}
+}
+
+func (router *Router) validApiKey(w http.ResponseWriter, r *http.Request) (*database.User, bool) {
+	_, apiKey, found := strings.Cut(r.Header.Get("Authorization"), "Bearer ")
+	if !found {
+		apiKeyError(w)
+	}
+
+	user, err := router.db.UserByKey(apiKey)
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, false
+
+	case err != nil:
+		internalServerError(w)
+		return nil, false
+	}
+	if !user.Key.Valid {
+		return nil, false
+	}
+	if subtle.ConstantTimeCompare([]byte(apiKey), []byte(user.Key.String)) == 0 {
+		return nil, false
+	}
+
+	return &user, true
+}
+
+func (router *Router) postData(w http.ResponseWriter, r *http.Request, ip string) {
+	ok := router.limiter.LimitDuration(ip, registerDuration)
+	if !ok {
+		tooManyRequests(w)
+		return
+	}
+	user, ok := router.validApiKey(w, r)
+	if !ok {
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		internalServerError(w)
+		return
+	}
+	bodyFiltered := strings.ToValidUTF8(string(body), "")
+	data := database.Data{
+		User:    user.Name,
+		Content: bodyFiltered,
+	}
+	err = router.db.ReplaceData(&data)
+	if err != nil {
+		internalServerError(w)
+		return
+	}
+}
+
+func (router *Router) getData(w http.ResponseWriter, r *http.Request, ip string) {
+	ok := router.limiter.Limit(ip)
+	if !ok {
+		tooManyRequests(w)
+		return
+	}
+	user, ok := router.validApiKey(w, r)
+	if !ok {
+		return
+	}
+
+	data, err := router.db.DataByUserName(user.Name)
+	switch {
+	case err == sql.ErrNoRows:
+		return
+
+	case err != nil:
+		internalServerError(w)
+		return
+	}
+
+	w.Write([]byte(data.Content))
 }

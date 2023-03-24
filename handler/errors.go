@@ -17,3 +17,7 @@ func tooManyRequests(w http.ResponseWriter) {
 func basicAuthError(w http.ResponseWriter) {
 	http.Error(w, "Malformed Authorization header: expected basic auth", http.StatusBadRequest)
 }
+
+func apiKeyError(w http.ResponseWriter) {
+	http.Error(w, "Malformed Authorization header: expectd api key", http.StatusBadRequest)
+}
