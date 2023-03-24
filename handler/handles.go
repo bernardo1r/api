@@ -173,6 +173,9 @@ func (router *Router) GenApiKey(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == sql.ErrNoRows:
 		w.Write([]byte(keyEncoded))
+		buff := make([]byte, 32)
+		rand.Read(buff)
+		hashPassword(user.Salt, buff)
 		return
 
 	case err != nil:
